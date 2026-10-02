@@ -20,7 +20,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemProperties
 import android.provider.Settings
 import android.widget.Toast
 import androidx.annotation.DrawableRes
@@ -41,6 +40,8 @@ import com.android.axion.gamespace.data.SystemSettings
 import java.util.concurrent.Executor
 import javax.inject.Inject
 import javax.inject.Singleton
+import lineageos.hardware.LineageHardwareManager
+import lineageos.providers.LineageSettings
 
 interface TileAction {
     val id: String
@@ -300,9 +301,10 @@ class TileRepository @Inject constructor(
             )
         )
 
-        if (SystemProperties.getBoolean("persist.sys.ax_touch_boost", false)) {
+        val hardwareManager = LineageHardwareManager.getInstance(context)
+        if (hardwareManager.isSupported(LineageHardwareManager.FEATURE_HIGH_TOUCH_POLLING_RATE)) {
             val touchBoostState = mutableStateOf(
-                SystemProperties.getInt("persist.sys.touchboost_enable", 0) == 1
+                hardwareManager.get(LineageHardwareManager.FEATURE_HIGH_TOUCH_POLLING_RATE)
             )
             add(
                 ToggleableTile(
@@ -311,8 +313,13 @@ class TileRepository @Inject constructor(
                     icon = R.drawable.materialsymbols_ic_touch_app_rounded_filled,
                     state = touchBoostState,
                     setter = {
-                        val newVal = if (it) 1 else 0
-                        SystemProperties.set("persist.sys.touchboost_enable", "$newVal")
+                        // keep the Display settings switch in sync with the same hardware call it uses
+                        LineageSettings.System.putInt(
+                            context.contentResolver,
+                            LineageSettings.System.HIGH_TOUCH_POLLING_RATE_ENABLE,
+                            if (it) 1 else 0
+                        )
+                        hardwareManager.set(LineageHardwareManager.FEATURE_HIGH_TOUCH_POLLING_RATE, it)
                         touchBoostState.value = it
                     },
                 )
