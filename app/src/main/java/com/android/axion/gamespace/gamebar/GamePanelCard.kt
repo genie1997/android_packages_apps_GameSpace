@@ -1268,12 +1268,13 @@ fun QuickStartAppIcon(
     modifier: Modifier = Modifier
 ) {
     val painter = rememberDrawablePainter(appInfo.icon)
+    val context = LocalContext.current
     Box(
         modifier = modifier
             .size(40.dp)
             .clip(CircleShape)
             .clickable {
-                launchAppInFreeformMode(appInfo.packageName)
+                launchAppInFreeformMode(context, appInfo.packageName)
             },
         contentAlignment = Alignment.Center
     ) {
@@ -1285,8 +1286,12 @@ fun QuickStartAppIcon(
     }
 }
 
-fun launchAppInFreeformMode(packageName: String) {
-    FreeformLauncher.launch(packageName)
+// device/compositor may ignore the freeform hint, but the app still launches either way
+fun launchAppInFreeformMode(context: Context, packageName: String) {
+    val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+    val options = ActivityOptions.makeBasic().setLaunchBounds(Rect(100, 100, 900, 1500))
+    options.setLaunchWindowingMode(WindowConfiguration.WINDOWING_MODE_FREEFORM)
+    context.startActivity(intent, options.toBundle())
 }
 
 @Composable
