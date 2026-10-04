@@ -31,13 +31,14 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import android.os.Bundle
 import com.android.axion.platform.AxFeatureState
 import com.android.axion.platform.AxPlatformClient
 import com.android.axion.platform.AxPlatformFeature
+import com.android.axion.platform.IAxPlatformCallback
 import com.android.axion.gamespace.R
 import com.android.axion.gamespace.data.AppSettings
 import com.android.axion.gamespace.data.SystemSettings
-import java.util.concurrent.Executor
 import javax.inject.Inject
 import javax.inject.Singleton
 import lineageos.hardware.LineageHardwareManager
@@ -117,13 +118,14 @@ class TileRepository @Inject constructor(
 
     private val platformTiles = mutableMapOf<String, PlatformTile>()
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val platformExecutor = Executor { command -> mainHandler.post(command) }
     private var platformRegistered = false
 
-    private val platformCallback =
-        AxPlatformClient.StateCallback { key, state ->
-            platformTiles[key]?.updateFromState(state)
+    // real service callback is on a binder thread; hop to main for Compose state
+    private val platformCallback = object : IAxPlatformCallback.Stub() {
+        override fun onStateChanged(key: String, state: Bundle) {
+            mainHandler.post { platformTiles[key]?.updateFromState(AxFeatureState(state)) }
         }
+    }
 
     private val _tileOrder = mutableStateListOf<String>()
 
@@ -151,7 +153,7 @@ class TileRepository @Inject constructor(
     fun refreshPlatformStates() {
         if (!::platform.isInitialized) return
         platformTiles.values.forEach { tile ->
-            val state = platform.getState(tile.id)
+            val state = AxFeatureState(platform.getState(tile.id))
             if (!state.isEmpty) tile.updateFromState(state)
         }
     }
@@ -187,7 +189,7 @@ class TileRepository @Inject constructor(
 
     private fun registerPlatformCallback() {
         if (platformRegistered) return
-        platform.registerCallback(platformExecutor, platformCallback)
+        platform.registerCallback(platformCallback)
         platformRegistered = true
     }
 
@@ -269,7 +271,7 @@ class TileRepository @Inject constructor(
                 icon = R.drawable.materialsymbols_ic_speed_rounded_filled,
                 action = {
                     val freedMb = try {
-                        AxMemoryManager.releaseMemory()
+                        AxMemoryManager.releaseMemory(context)
                     } catch (_: Exception) {
                         -1L
                     }
