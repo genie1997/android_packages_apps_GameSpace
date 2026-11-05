@@ -136,6 +136,7 @@ class DanmakuService @Inject constructor(
     }
 
     private fun unregisterListener() {
+        notificationListener.released = true
         try {
             notificationListener.unregisterAsSystemService()
         } catch (e: RemoteException) {

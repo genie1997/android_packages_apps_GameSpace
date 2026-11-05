@@ -31,8 +31,12 @@ class DanmakuServiceListener : NotificationListenerService() {
 
     var danmakuServiceInterface: DanmakuServiceInterface? = null
 
+    // Set on the main thread before unregistering; callbacks still queued there must not run
+    var released = false
+
     override fun onListenerConnected() {
         super.onListenerConnected()
+        if (released) return
         getActiveNotifications()?.forEach { sbn ->
             if (sbn.isClearable && !sbn.isOngoing) {
                 val danmakuText = extractDanmakuText(sbn)
@@ -44,6 +48,7 @@ class DanmakuServiceListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (released) return
         val notificationMode = danmakuServiceInterface?.danmakuNotificationMode ?: return
         if (!notificationMode || !sbn.isClearable || sbn.isOngoing) return
 
